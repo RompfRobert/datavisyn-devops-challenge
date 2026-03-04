@@ -1,0 +1,30 @@
+project_name = "devops-challenge"
+environment  = "dev"
+region       = "us-east-1"
+
+# Optional explicit name; leave empty to auto-generate from project/environment.
+cluster_name = ""
+
+vpc_cidr               = "10.0.0.0/16"
+az_count               = 2
+availability_zones     = []
+enable_nat_gateway     = true
+single_nat_gateway     = true
+one_nat_gateway_per_az = false
+
+kubernetes_version                   = "1.31"
+cluster_endpoint_public_access       = true
+cluster_endpoint_private_access      = true
+cluster_endpoint_public_access_cidrs = ["0.0.0.0/0"]
+
+node_group_name         = "default"
+node_instance_types     = ["t3.medium"]
+node_capacity_type      = "ON_DEMAND"
+node_group_min_size     = 1
+node_group_max_size     = 3
+node_group_desired_size = 2
+node_group_disk_size    = 20
+
+tags = {
+  Owner = "platform-team"
+}
