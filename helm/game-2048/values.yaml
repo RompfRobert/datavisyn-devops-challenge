@@ -80,11 +80,11 @@ ingress:
     pathType: Prefix
   tls: []
   auth:
-    enabled: false
+    enabled: true
     annotations: {}
 
 oauth2Proxy:
-  enabled: false
+  enabled: true
   image:
     repository: quay.io/oauth2-proxy/oauth2-proxy
     tag: v7.6.0
