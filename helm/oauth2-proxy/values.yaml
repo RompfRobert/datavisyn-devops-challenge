@@ -1,0 +1,39 @@
+replicaCount: 1
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: quay.io/oauth2-proxy/oauth2-proxy
+  pullPolicy: IfNotPresent
+  tag: "v7.8.1"
+
+service:
+  type: ClusterIP
+  port: 4180
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations: {}
+  host: oauth2.local
+  path: /oauth2
+  pathType: Prefix
+  tls: []
+
+github:
+  clientId: ""
+  clientSecret: ""
+
+oauth2Proxy:
+  cookieSecret: ""
+  emailDomain: "*"
+  cookieSecure: false
+
+resources: {}
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

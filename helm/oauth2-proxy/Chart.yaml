@@ -1,0 +1,6 @@
+apiVersion: v2
+name: oauth2-proxy
+description: Minimal oauth2-proxy chart for GitHub OAuth with ingress-nginx external auth
+type: application
+version: 0.1.0
+appVersion: "7.8.1"
