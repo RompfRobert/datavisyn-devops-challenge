@@ -3,6 +3,9 @@ kind: Application
 metadata:
   name: root-app
   namespace: argocd
+  labels:
+    app.kubernetes.io/name: root-app
+    app.kubernetes.io/instance: root
 spec:
   project: default
   source:
@@ -16,5 +19,7 @@ spec:
     automated:
       prune: true
       selfHeal: true
+      allow-empty: false
     syncOptions:
       - CreateNamespace=true
+      - RespectIgnoreDifferences=true

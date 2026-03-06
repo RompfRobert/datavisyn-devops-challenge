@@ -3,18 +3,28 @@ kind: Application
 metadata:
   name: game-2048
   namespace: argocd
+  labels:
+    app.kubernetes.io/name: game-2048
+    app.kubernetes.io/instance: game
 spec:
   project: default
   source:
     repoURL: https://github.com/RompfRobert/datavisyn-devops-challenge
     targetRevision: master
     path: helm/game-2048
+    plugin:
+      name: helm-secrets
     helm:
+      releaseName: challenge
       values: |
         ingress:
           enabled: true
           className: nginx
           hosts: []
+        oauth2Proxy:
+          enabled: true
+          cookieSecure: false
+          existingSecret: oauth2-proxy-secret
   destination:
     server: https://kubernetes.default.svc
     namespace: default
@@ -22,3 +32,6 @@ spec:
     automated:
       prune: true
       selfHeal: true
+      allow-empty: false
+    syncOptions:
+      - RespectIgnoreDifferences=true
