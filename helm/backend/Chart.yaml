@@ -1,0 +1,6 @@
+apiVersion: v2
+name: backend
+description: Minimal backend Helm chart using a dummy HTTP echo service
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
