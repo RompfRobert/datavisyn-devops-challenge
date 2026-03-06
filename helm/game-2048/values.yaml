@@ -68,10 +68,9 @@ backend:
 
 ingress:
   enabled: true
-  className: ""
+  className: nginx
   annotations: {}
-  hosts:
-    - host: chart-example.local
+  hosts: []
   frontend:
     path: /
     pathType: Prefix
@@ -80,3 +79,36 @@ ingress:
     path: /api
     pathType: Prefix
   tls: []
+  auth:
+    enabled: false
+    annotations: {}
+
+oauth2Proxy:
+  enabled: false
+  image:
+    repository: quay.io/oauth2-proxy/oauth2-proxy
+    tag: v7.6.0
+    pullPolicy: IfNotPresent
+  provider: github
+  clientID: ""
+  clientSecret: ""
+  cookieSecret: ""
+  existingSecret: oauth2-proxy-secret
+  secretKeys:
+    clientIDKey: client-id
+    clientSecretKey: client-secret
+    cookieSecretKey: cookie-secret
+  emailDomain: "*"
+  cookieSecure: false
+  cookieName: "_oauth2_proxy"
+  cookieExpire: "8h"
+  redirectURL: ""
+  upstream: ""
+  extraArgs: []
+  replicaCount: 1
+  service:
+    port: 4180
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
