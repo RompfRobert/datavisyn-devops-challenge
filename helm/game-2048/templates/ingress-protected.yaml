@@ -1,14 +1,21 @@
-{{- if and .Values.ingress.enabled (or (not .Values.oauth2Proxy.enabled) (not .Values.ingress.auth.enabled)) }}
+{{- if and .Values.ingress.enabled .Values.ingress.auth.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ include "game-2048.fullname" . }}
+  name: {{ include "game-2048.fullname" . }}-protected
   labels:
     {{- include "game-2048.labels" . | nindent 4 }}
-  {{- with .Values.ingress.annotations }}
+    app.kubernetes.io/component: app
   annotations:
+    # nginx-ingress auth annotations for oauth2-proxy
+    nginx.ingress.kubernetes.io/auth-url: "http://{{ include "game-2048.fullname" . }}-oauth2-proxy.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.oauth2Proxy.service.port }}/oauth2/auth"
+    nginx.ingress.kubernetes.io/auth-signin: "http://$host/oauth2/start?rd=$escaped_request_uri"
+    {{- with .Values.ingress.auth.annotations }}
     {{- toYaml . | nindent 4 }}
-  {{- end }}
+    {{- end }}
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
 spec:
   {{- with .Values.ingress.className }}
   ingressClassName: {{ . }}
