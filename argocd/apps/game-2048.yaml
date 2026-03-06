@@ -12,10 +12,8 @@ spec:
     repoURL: https://github.com/RompfRobert/datavisyn-devops-challenge
     targetRevision: master
     path: helm/game-2048
-    plugin:
-      name: helm-secrets
     helm:
-      releaseName: challenge
+      releaseName: dev
       values: |
         ingress:
           enabled: true
