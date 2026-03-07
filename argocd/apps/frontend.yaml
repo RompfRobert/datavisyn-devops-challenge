@@ -3,11 +3,13 @@ kind: Application
 metadata:
   name: frontend
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
 spec:
   project: default
   source:
     repoURL: https://github.com/RompfRobert/datavisyn-devops-challenge.git
-    targetRevision: argocd
+    targetRevision: dev
     path: helm/frontend
     helm:
       values: |

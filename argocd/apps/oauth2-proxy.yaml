@@ -3,13 +3,17 @@ kind: Application
 metadata:
   name: oauth2-proxy
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   project: default
   source:
     repoURL: https://github.com/RompfRobert/datavisyn-devops-challenge.git
-    targetRevision: argocd
+    targetRevision: dev
     path: helm/oauth2-proxy
     helm:
+      valueFiles:
+        - secrets://secrets/values.sops.yaml
       values: |
         ingress:
           enabled: true
@@ -24,8 +28,7 @@ spec:
               hosts:
                 - challenge.rompf.dev
         secret:
-          create: false
-          existingSecret: oauth2-proxy-secret
+          create: true
         oauth2Proxy:
           emailDomain: "*"
           cookieSecure: true

@@ -1,0 +1,37 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: external-dns
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+  source:
+    repoURL: https://kubernetes-sigs.github.io/external-dns/
+    chart: external-dns
+    targetRevision: "1.20.0"
+    helm:
+      values: |
+        provider: aws
+        policy: sync
+        registry: txt
+        txtOwnerId: "devops-challenge-dev-eks-external-dns"
+        domainFilters:
+          - "challenge.rompf.dev"
+        sources:
+          - ingress
+        serviceAccount:
+          create: true
+          name: external-dns
+          annotations:
+            eks.amazonaws.com/role-arn: "arn:aws:iam::216031747246:role/devops-challenge-dev-external-dns"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: external-dns
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
