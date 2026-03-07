@@ -36,3 +36,7 @@ override.tf.json
 .terraformrc
 terraform.rc
 oauth2-values.yaml
+helm/oauth2-proxy/secrets/values.yaml
+.helm-secrets.yaml
+.sops.yaml
+*.log
