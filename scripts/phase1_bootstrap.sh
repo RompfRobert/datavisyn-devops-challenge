@@ -1,4 +1,19 @@
 #!/usr/bin/env bash
+
+SCRIPT_IS_SOURCED=0
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+  SCRIPT_IS_SOURCED=1
+fi
+
+ORIGINAL_SHELL_OPTIONS="$(set +o)"
+restore_shell_options() {
+  if [[ "${SCRIPT_IS_SOURCED}" -eq 1 ]]; then
+    eval "${ORIGINAL_SHELL_OPTIONS}"
+  fi
+}
+
+trap restore_shell_options EXIT
+
 set -euo pipefail
 
 NAMESPACE="${NAMESPACE:-demo}"
