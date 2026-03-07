@@ -191,6 +191,11 @@ repoServer:
       env:
         - name: HELM_PLUGINS
           value: /helm-plugins
+      volumeMounts:
+        - name: custom-tools
+          mountPath: /custom-tools
+        - name: helm-plugins
+          mountPath: /helm-plugins
       command: ["/bin/sh","-c"]
       args:
         - |
