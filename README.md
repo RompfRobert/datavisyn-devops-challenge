@@ -134,7 +134,7 @@ flowchart LR
 We can run the following command to provision the entire infrastructure in AWS:
 
 ```bash
-git clone git@github.com:RompfRobert/datavisyn-devops-challenge.git && cd datavisyn-devops-challenge && git checkout argocd && cd terraform && terraform init && terraform apply -auto-approve && cd ..
+git clone https://github.com/RompfRobert/datavisyn-devops-challenge.git && cd datavisyn-devops-challenge && git checkout argocd && cd terraform && terraform init && terraform apply -auto-approve && cd ..
 ```
 
 Using terraform outputs it's easy to configure kubeconfig:
