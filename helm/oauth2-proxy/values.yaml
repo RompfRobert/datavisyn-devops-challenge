@@ -29,6 +29,8 @@ oauth2Proxy:
   cookieSecret: ""
   emailDomain: "*"
   cookieSecure: false
+  # Use broad GitHub user scope to satisfy org/user API checks.
+  scope: "user"
 
 resources: {}
 

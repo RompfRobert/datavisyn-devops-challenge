@@ -27,7 +27,7 @@ spec:
             - --cookie-secure={{ .Values.oauth2Proxy.cookieSecure | ternary "true" "false" }}
             - --set-xauthrequest=true
             - --reverse-proxy=true
-            - --scope=read:user
+            - --scope={{ .Values.oauth2Proxy.scope }}
           envFrom:
             - secretRef:
                 name: {{ include "oauth2-proxy.fullname" . }}
