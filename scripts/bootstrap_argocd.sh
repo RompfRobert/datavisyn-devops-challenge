@@ -181,7 +181,10 @@ configs:
   params:
     server.insecure: "false"
   rbac:
-    policy.default: role:admin
+    policy.default: role:readonly
+    policy.csv: |
+      g, RompfRobert, role:admin
+      g, https://github.com/RompfRobert, role:admin
   cm:
     url: https://${ARGOCD_HOST}
     dex.config: |
