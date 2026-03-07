@@ -9,6 +9,20 @@ LOG_FILE="${ROOT_DIR}/phase1-$(date +%s).log"
 exec > >(tee -a "${LOG_FILE}")
 exec 2>&1
 
+on_error() {
+  local exit_code=$?
+  echo ""
+  echo "Phase 1 failed with exit code ${exit_code}."
+  echo "Check log: ${LOG_FILE}"
+  if [[ -t 0 ]]; then
+    echo "Press Enter to exit..."
+    read -r
+  fi
+  exit "${exit_code}"
+}
+
+trap on_error ERR
+
 echo "Log file: ${LOG_FILE}"
 
 # Ensure helm-secrets plugin is present for phase 2.
@@ -23,6 +37,23 @@ helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
   --namespace ingress-nginx \
   --create-namespace \
   -f "${ROOT_DIR}/helm/ingress-nginx-values.yaml"
+
+echo "Waiting for ingress controller deployment to become ready..."
+kubectl -n ingress-nginx rollout status deploy/ingress-nginx-controller --timeout=300s
+
+echo "Waiting for ingress admission endpoints..."
+for _ in $(seq 1 60); do
+  ADMISSION_READY="$(kubectl -n ingress-nginx get endpoints ingress-nginx-controller-admission -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null || true)"
+  if [[ -n "${ADMISSION_READY}" ]]; then
+    break
+  fi
+  sleep 5
+done
+
+if [[ -z "${ADMISSION_READY:-}" ]]; then
+  echo "Ingress admission endpoints not ready in time" >&2
+  exit 1
+fi
 
 echo "Waiting for ingress-nginx external hostname..."
 LB_HOSTNAME=""
@@ -77,6 +108,4 @@ Next step after GitHub OAuth app creation:
   ./scripts/phase2_enable_oauth.sh
 EOF
 
-echo ""
-echo "Press Enter to exit..."
-read -r
+trap - ERR
