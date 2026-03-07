@@ -38,7 +38,7 @@ terraform version && kubectl version --client && helm version && aws --version &
 Clone the repository and enter the directory:
 
 ```bash
-git clone git@github.com:RompfRobert/datavisyn-devops-challenge.git && cd datavisyn-devops-challenge
+git clone https://github.com/RompfRobert/datavisyn-devops-challenge.git && cd datavisyn-devops-challenge
 ```
 
 ### Step 1: Provision the EKS Cluster with Terraform
