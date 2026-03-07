@@ -65,27 +65,27 @@ flowchart LR
   NC[Namecheap DNS]
 
   subgraph AWS[AWS eu-central-1]
-    R53[Route53 Hosted Zone\nchallenge.rompf.dev]
+    R53[Route53 Hosted Zone<br/>challenge.rompf.dev]
     ELB[Ingress NLB/ELB]
 
-    subgraph EKS[EKS Cluster\ndatavisyn-devops-challenge]
+    subgraph EKS[EKS Cluster<br/>datavisyn-devops-challenge]
       subgraph KubeSys[Kubernetes Platform]
         NGINX[ingress-nginx]
-        EXT[ExternalDNS\n(IRSA role)]
-        CM[cert-manager\n(IRSA role)]
+        EXT[ExternalDNS<br/>IRSA role]
+        CM[cert-manager<br/>IRSA role]
         LE[Let's Encrypt ACME]
-        ISS[ClusterIssuer\nletsencrypt-dns]
+        ISS[ClusterIssuer<br/>letsencrypt-dns]
       end
 
       subgraph ArgoNS[argocd namespace]
         ARGO[ArgoCD Server + Dex]
         ROOT[platform-root app]
-        APPS[Child Apps\nfrontend/backend/oauth2-proxy]
+        APPS[Child Apps<br/>frontend/backend/oauth2-proxy]
       end
 
       subgraph DemoNS[demo namespace]
-        FE[frontend\n2048]
-        BE[backend\nhttp-echo]
+        FE[frontend<br/>2048]
+        BE[backend<br/>http-echo]
         O2P[oauth2-proxy]
         O2S[oauth2-proxy-secret]
       end
@@ -94,7 +94,7 @@ flowchart LR
 
   TF[Terraform]
   BS[scripts/bootstrap_argocd.sh]
-  REPO[GitHub Repo\nargocd branch]
+  REPO[GitHub Repo<br/>argocd branch]
 
   TF -->|provisions| EKS
   TF -->|creates NS delegation zone| R53
