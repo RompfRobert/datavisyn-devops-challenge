@@ -1,11 +1,19 @@
-# Datavisyn DevOps Coding Challenge
+# Datavisyn DevOps Challenge (ArgoCD Branch)
 
-Welcome to my solution for the Datavisyn DevOps Challenge. I have implemented two separate approaches to showcase both solid engineering principles and advanced GitOps capabilities.
+This branch contains the GitOps implementation of the challenge. It provisions EKS with Terraform and deploys the platform and apps declaratively via ArgoCD.
 
-**Branch Overview:**
+The deployed stack includes:
 
-1. **`master` (default)** — Reproducible reviewer workflow optimized for maximum accessibility. Uses imperative scripts with local secret input. Any reviewer can clone, run Terraform, and bootstrap the entire stack locally.
-2. **`argocd`** — Bonus GitOps implementation demonstrating declarative infrastructure, stable subdomain integration using Route53, and automated reconciliation with ArgoCD. Intended as a capability showcase rather than the primary review path.
+- AWS EKS + VPC via Terraform
+- Route53 delegated subdomain (`challenge.rompf.dev`)
+- ingress-nginx
+- ExternalDNS (IRSA)
+- cert-manager with ACME DNS-01 (IRSA)
+- ArgoCD with GitHub login (Dex connector)
+- `frontend` (2048), `backend` (http-echo), and `oauth2-proxy`
+- OAuth protection for frontend/backend through ingress external auth
+
+If you want the imperative reviewer flow, use `master`. This README is for `argocd`.
 
 ## Prerequisites
 
@@ -30,146 +38,238 @@ All of the following tools must be installed:
 Verify your installations:
 
 ```bash
-terraform version && kubectl version --client && helm version && aws --version && sops --version && gpg --version
+terraform version
+kubectl version
+helm version
+aws --version
+jq --version
+openssl version
+git --version
 ```
 
-## Getting Started
+AWS credentials must be configured before applying Terraform.
 
-Clone the repository and enter the directory:
+## High-Level Flow
+
+1. Terraform provisions EKS and DNS/IAM foundations.
+2. `bootstrap_argocd.sh` installs platform controllers.
+3. ArgoCD deploys app-of-apps (`platform-root`) from this repo.
+4. Ingress routes `challenge.rompf.dev` through oauth2-proxy auth.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  U[User Browser]
+  GH[GitHub OAuth]
+  NC[Namecheap DNS]
+
+  subgraph AWS[AWS eu-central-1]
+    R53[Route53 Hosted Zone\nchallenge.rompf.dev]
+    ELB[Ingress NLB/ELB]
+
+    subgraph EKS[EKS Cluster\ndatavisyn-devops-challenge]
+      subgraph KubeSys[Kubernetes Platform]
+        NGINX[ingress-nginx]
+        EXT[ExternalDNS\n(IRSA role)]
+        CM[cert-manager\n(IRSA role)]
+        LE[Let's Encrypt ACME]
+        ISS[ClusterIssuer\nletsencrypt-dns]
+      end
+
+      subgraph ArgoNS[argocd namespace]
+        ARGO[ArgoCD Server + Dex]
+        ROOT[platform-root app]
+        APPS[Child Apps\nfrontend/backend/oauth2-proxy]
+      end
+
+      subgraph DemoNS[demo namespace]
+        FE[frontend\n2048]
+        BE[backend\nhttp-echo]
+        O2P[oauth2-proxy]
+        O2S[oauth2-proxy-secret]
+      end
+    end
+  end
+
+  TF[Terraform]
+  BS[scripts/bootstrap_argocd.sh]
+  REPO[GitHub Repo\nargocd branch]
+
+  TF -->|provisions| EKS
+  TF -->|creates NS delegation zone| R53
+  BS -->|installs via Helm| NGINX
+  BS -->|installs via Helm| EXT
+  BS -->|installs via Helm| CM
+  BS -->|installs via Helm| ARGO
+  BS -->|applies| ISS
+  BS -->|creates| O2S
+  BS -->|applies root app| ROOT
+
+  ROOT --> APPS
+  REPO -->|sync targetRevision=argocd| ARGO
+  APPS --> FE
+  APPS --> BE
+  APPS --> O2P
+
+  EXT -->|manages DNS records| R53
+  CM --> ISS
+  ISS -->|DNS-01| LE
+  LE -->|challenge TXT via Route53| R53
+
+  NC -->|delegates challenge.rompf.dev NS| R53
+  U -->|argocd.challenge.rompf.dev| ELB
+  U -->|challenge.rompf.dev| ELB
+  ELB --> NGINX
+
+  NGINX -->|/oauth2/*| O2P
+  NGINX -->|auth-url subrequest| O2P
+  O2P -->|GitHub auth flow| GH
+  NGINX -->|/| FE
+  NGINX -->|/api| BE
+```
+
+## 1) Provision Infrastructure
+
+We can run the following command to provision the entire infrastructure in AWS:
 
 ```bash
-git clone git@github.com:RompfRobert/datavisyn-devops-challenge.git && cd datavisyn-devops-challenge
+git clone git@github.com:RompfRobert/datavisyn-devops-challenge.git && cd datavisyn-devops-challenge && git checkout argocd && cd terraform && terraform init && terraform apply -auto-approve && cd ..
 ```
 
-### Step 1: Provision the EKS Cluster with Terraform
+Using terraform outputs it's easy to configure kubeconfig:
 
 ```bash
-cd terraform && terraform apply -auto-approve && cd ..
+aws eks update-kubeconfig \
+   --region "$(terraform -chdir=terraform output -raw region)" \
+   --name "$(terraform -chdir=terraform output -raw cluster_name)"
 ```
 
-> **Note:** Infrastructure provisioning typically takes 10–20 minutes.
+Before we proceed, it is important to do the following step. In the terraform output, there will be the `delegated_zone_name_servers`, to set up Route53 to manage the subdomains we need to delegate the `challenge.rompf.dev` NS records at our registrar before continuing. This looks different for every registrar but the fundamentals are the same.
 
-Once Terraform completes, configure `kubectl` to access the cluster:
+## 2) Create GitHub OAuth Apps
 
-```bash
-aws eks update-kubeconfig --region $(terraform -chdir=terraform output -raw region) --name $(terraform -chdir=terraform output -raw cluster_name)
-```
+Create two OAuth Apps in GitHub Developer Settings.
 
-**Verify cluster access:**
+App OAuth (for `challenge.rompf.dev`):
 
-```bash
-kubectl config get-contexts
-kubectl get nodes
-```
+- Homepage URL: `https://challenge.rompf.dev`
+- Callback URL: `https://challenge.rompf.dev/oauth2/callback`
 
-### Step 2: Bootstrap the Application Stack
+ArgoCD OAuth (for `argocd.challenge.rompf.dev`):
 
-Automated bootstrap scripts will deploy the Kubernetes infrastructure and application services. The process is divided into two phases:
+- Homepage URL: `https://argocd.challenge.rompf.dev`
+- Callback URL: `https://argocd.challenge.rompf.dev/api/dex/callback`
 
-**Phase 1:** Deploy ingress-nginx, frontend, and backend applications accessible via the dynamically provisioned ELB hostname.
+Keep both client IDs and secrets ready.
+
+## 3) Bootstrap Platform + ArgoCD
 
 Run:
 
 ```bash
-./scripts/phase1_bootstrap.sh
+./scripts/bootstrap_argocd.sh
 ```
 
-Wait 2–3 minutes for the load balancer to stabilize, then verify using the `curl` commands or visit the URL in your browser.
+> Before you run the bootstrap, be sure the change the domain to YOUR domain in the code otherwise it's going to use `rompf.dev`
 
-**Alternative: Manual Helm Installation**
+The script will:
 
-If you prefer to skip the bootstrap script or install components individually:
+- read Terraform outputs for region, hosts, zone, and IRSA roles
+- print Route53 nameservers for delegation
+- ask for OAuth credentials and Let's Encrypt email
+- install ingress-nginx, ExternalDNS, cert-manager, and ArgoCD
+- create `letsencrypt-dns` ClusterIssuer
+- create `demo/oauth2-proxy-secret`
+- apply `argocd/root-application.yaml`
+
+## 4) Verify Deployment
+
+ArgoCD apps:
 
 ```bash
-helm upgrade --install backend ./helm/backend -n demo --create-namespace
-helm upgrade --install frontend ./helm/frontend -n demo
-kubectl get pods,svc -n demo
+kubectl -n argocd get applications.argoproj.io -o wide
 ```
 
-To verify deployment and test locally:
+Expected apps:
+
+- `platform-root`
+- `frontend`
+- `backend`
+- `oauth2-proxy`
+
+Ingresses:
 
 ```bash
-kubectl port-forward svc/frontend 8080:80 -n demo &
-kubectl port-forward svc/backend 8081:80 -n demo &
-
-curl http://localhost:8080
-curl http://localhost:8081/test
+kubectl get ingress -A
 ```
 
-**Phase 2:** Set up OAuth2 authentication using GitHub.
+Expected hosts:
 
-Before running Phase 2, create a GitHub OAuth Application:
+- `argocd.challenge.rompf.dev`
+- `challenge.rompf.dev` (frontend/backend/oauth2-proxy paths)
 
-1. Go to [GitHub Settings → Developer applications](https://github.com/settings/developers)
-2. Click **New OAuth App**
-3. Fill in:
-   - **Application name:** Any name (e.g., "DevOps Challenge")
-   - **Homepage URL:** The ELB URL from Phase 1 output (e.g., `http://<ELB-HOSTNAME>`)
-   - **Authorization callback URL:** `http://<ELB-HOSTNAME>/oauth2/callback`
-4. Click **Register application**
-5. Save the **Client ID** and **Client Secret**
-
-Now run the Phase 2 bootstrap script:
+Certificates:
 
 ```bash
-./scripts/phase2_enable_oauth.sh
+kubectl -n demo get certificate
 ```
 
-The script will prompt you to:
+Expected:
 
-- Select or create a GPG key for SOPS encryption
-- Enter your GitHub OAuth Client ID and Client Secret
-- Confirm the deployment
+- `challenge-rompf-dev-tls` is `READY=True`
 
-Once the oauth2-proxy pod is ready (2–3 minutes), open the URL from the output in your browser. You should be redirected to GitHub to authenticate.
+DNS:
 
-## Architecture & Design Decisions
+```bash
+nslookup challenge.rompf.dev
+nslookup argocd.challenge.rompf.dev
+```
 
-**Demo Configuration Notes:**
+## Visual Proof
 
-- **HTTP Only:** For simplicity in a demo environment, the setup uses HTTP instead of HTTPS. Production deployments would use TLS certificates (via cert-manager and Route53).
-- **Cookie Security:** OAuth2 cookies are marked as non-secure (`cookieSecure: false`) to work over HTTP. This is intentional for the demo.
-- **Email Domain:** Set to `*` to allow any GitHub user. Restrict this to your organization in production.
-- **CLI Access:** After enabling OAuth, browser-based access works; CLI access (curl) returns 302 redirects. In production, add API-level authentication or implement a separate endpoint.
+Here we can see the argocd homepage:
 
-## Bonus: GitOps with ArgoCD
+![ArgoCD Homepage](<images/Screenshot From 2026-03-07 16-04-30.png>)
 
-For an advanced declarative approach with stable DNS integration, see the [`argocd` branch](https://github.com/RompfRobert/datavisyn-devops-challenge/tree/argocd). That branch includes:
+Next if we wish to authenticate with GitHub Login:
 
-- Route53 DNS integration with your own domain
-- ArgoCD for GitOps-driven deployments
-- Stable HTTPS ingress configuration
-- Automated certificate management
+![GitHub OAuth](<images/Screenshot From 2026-03-07 16-05-46.png>)
 
-The `argocd` branch demonstrates enterprise-grade GitOps practices but requires domain ownership and is less reproducible for third-party reviewers.
+After succesfully authenticating, we can access the dashboard:
 
-## Troubleshooting
+![ArgoCD Dashboard](<images/Screenshot From 2026-03-07 16-06-20.png>)
 
-**Phase 1 hangs waiting for load balancer:**
+If we go to the App Homepage we will be prompted with the same GitHub auth and after we authenticate, we can see the app:
 
-- AWS can take 5–10 minutes to provision the ELB. The script will retry up to 60 times (10 minutes).
-- Manually check: `kubectl -n ingress-nginx get svc ingress-nginx-controller`
+![2048 Game](<images/Screenshot From 2026-03-07 16-07-27.png>)
 
-**Phase 2 fails with GPG errors:**
+The same applies for the backend:
 
-- Ensure `gpg` and `sops` are installed and `helm-secrets` plugin was installed in Phase 1.
-- Check: `helm plugin list | grep secrets`
+![Backend](<images/Screenshot From 2026-03-07 16-08-31.png>)
 
-**OAuth redirect fails:**
+## Architecture Notes
 
-- Confirm the GitHub OAuth App callback URL exactly matches the Phase 1 ELB URL plus `/oauth2/callback`.
-- Verify the oauth2-proxy pod is running: `kubectl -n demo get pods -l app=oauth2-proxy`
+- ArgoCD uses app-of-apps (`argocd/root-application.yaml`) with child apps in `argocd/apps/`.
+- `oauth2-proxy` runs with `secret.create=false` and references `oauth2-proxy-secret`.
+- Frontend/backend ingress auth uses:
+  - `nginx.ingress.kubernetes.io/auth-url: http://oauth2-proxy.demo.svc.cluster.local:4180/oauth2/auth`
+  - `nginx.ingress.kubernetes.io/auth-signin: https://challenge.rompf.dev/oauth2/start?rd=$escaped_request_uri`
+- TLS is owned by frontend ingress (`challenge-rompf-dev-tls`) via cert-manager.
+- Frontend/backend services use `internalTrafficPolicy: Local` and are scaled to 2 replicas with pod anti-affinity for node-local resilience.
+
+## ArgoCD Login and App Visibility
+
+ArgoCD login is configured via Dex + GitHub OAuth.
+
+To ensure GitHub users can see apps by default, the cluster RBAC config should include:
+
+- `argocd-rbac-cm.data.policy.default = role:admin`
+
+This default is baked into `scripts/bootstrap_argocd.sh` for new environments.
 
 ## Cleanup
 
-To destroy all resources and avoid charges:
-
 ```bash
-./scripts/reset_cluster.sh
+./scripts/reset_cluster.sh && cd terraform && terraform destroy -auto-approve && cd ..
 ```
-
-```bash
-cd terraform && terraform destroy -auto-approve && cd ..
-```
-
-This will remove the EKS cluster, VPC, and all associated AWS resources.
