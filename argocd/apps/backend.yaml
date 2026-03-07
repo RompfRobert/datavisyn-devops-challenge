@@ -1,0 +1,38 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: backend
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/RompfRobert/datavisyn-devops-challenge.git
+    targetRevision: argocd
+    path: helm/backend
+    helm:
+      values: |
+        ingress:
+          enabled: true
+          className: nginx
+          annotations:
+            cert-manager.io/cluster-issuer: letsencrypt-dns
+            nginx.ingress.kubernetes.io/auth-url: https://challenge.rompf.dev/oauth2/auth
+            nginx.ingress.kubernetes.io/auth-signin: https://challenge.rompf.dev/oauth2/start?rd=$escaped_request_uri
+          hosts:
+            - host: challenge.rompf.dev
+              paths:
+                - path: /api
+                  pathType: Prefix
+          tls:
+            - secretName: challenge-rompf-dev-tls
+              hosts:
+                - challenge.rompf.dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: demo
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
