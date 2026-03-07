@@ -1,119 +1,175 @@
 # Datavisyn DevOps Coding Challenge
 
-Welcome to my DevOps Challenge for datavisyn. I have implemented 2 separate answers for this challange, 1 is the imperative flow optimized for maximum reproducability. The 2nd way can be found on the secondary branch `argocd`.
+Welcome to my solution for the Datavisyn DevOps Challenge. I have implemented two separate approaches to showcase both solid engineering principles and advanced GitOps capabilities.
 
-1. The default branch contains the reproducible reviewer workflow using local secret input. 
-2. The argocd branch contains the bonus GitOps implementation with stable subdomain integration.
-3. The argocd branch is intended as a capability demonstration rather than the primary review path.
+**Branch Overview:**
+
+1. **`master` (default)** — Reproducible reviewer workflow optimized for maximum accessibility. Uses imperative scripts with local secret input. Any reviewer can clone, run Terraform, and bootstrap the entire stack locally.
+2. **`argocd`** — Bonus GitOps implementation demonstrating declarative infrastructure, stable subdomain integration using Route53, and automated reconciliation with ArgoCD. Intended as a capability showcase rather than the primary review path.
 
 ## Prerequisites
 
-This guide is specifically aimed at MacOs/Linux. If you are using Windows, please use WSL. On how to install WSL, please find the guide [here]().
+This guide is designed for **macOS** and **Linux**. Windows users should use [WSL 2](https://learn.microsoft.com/en-us/windows/wsl/install).
 
-We assume that you have already configured your AWS credentials. If not, please do so before continuing. You can find the guide on how to install and configure the aws cli [here](./docs/aws.md).
+**AWS Credentials:**  
+Configure your AWS credentials before proceeding. See the [AWS CLI Configuration Guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-quickstart.html).
 
-We also assume that the following technologies are installed on the system:
+**Required Tools:**
 
-- Terraform
-- sops
-- GPG
-- aws
-- kubectl
-- helm
+All of the following tools must be installed:
 
-## Imperative Approach - Maximum Reproducability
+| Tool | Version | Installation |
+|------|---------|--------------|
+| **Terraform** | >= 1.5.0 | [Download](https://www.terraform.io/downloads) • [Homebrew](https://formulae.brew.sh/formula/terraform) |
+| **kubectl** | >= 1.27 | [Download](https://kubernetes.io/docs/tasks/tools/) • [Homebrew](https://formulae.brew.sh/formula/kubernetes-cli) |
+| **Helm** | >= 3.12 | [Download](https://helm.sh/docs/intro/install/) • [Homebrew](https://formulae.brew.sh/formula/helm) |
+| **AWS CLI** | v2 | [Download](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) • [Homebrew](https://formulae.brew.sh/formula/awscli) |
+| **sops** | >= 3.8 | [GitHub](https://github.com/getsops/sops#installation) • [Homebrew](https://formulae.brew.sh/formula/sops) |
+| **GPG** | >= 2.2 | [Download](https://gnupg.org/download/) • [Homebrew](https://formulae.brew.sh/formula/gnupg) |
 
-To get started please clone the repository first and change directories:
+Verify your installations:
 
 ```bash
-git clone <REPO> && cd datavisyn-devops-challenge
+terraform version && kubectl version --client && helm version && aws --version && sops --version && gpg --version
 ```
 
-### Step 1: Create the Infrastructure
+## Getting Started
+
+Clone the repository and enter the directory:
+
+```bash
+git clone git@github.com:RompfRobert/datavisyn-devops-challenge.git && cd datavisyn-devops-challenge
+```
+
+### Step 1: Provision the EKS Cluster with Terraform
 
 ```bash
 cd terraform && terraform apply -auto-approve && cd ..
 ```
 
-The infrastrucutre creation might take longer than expecred 10-20 minutes. Grab a coffee while you wait :)
+> **Note:** Infrastructure provisioning typically takes 10–20 minutes.
 
-Once the infrastructe was created, configure kubectl to use the EKS cluster.
+Once Terraform completes, configure `kubectl` to access the cluster:
 
 ```bash
-aws eks update-kubeconfig --region <REGION> --name <NAME>
+aws eks update-kubeconfig --region $(terraform -chdir=terraform output -raw region) --name $(terraform -chdir=terraform output -raw cluster_name)
 ```
 
-#### Verify
+**Verify cluster access:**
 
 ```bash
 kubectl config get-contexts
-```
-
-```bash
 kubectl get nodes
 ```
 
-### Step 2: Run the bootstrap script
+### Step 2: Bootstrap the Application Stack
 
-To eliminate user errors, I have developed a shell script that will bootstrap the entire application itself.
+Automated bootstrap scripts will deploy the Kubernetes infrastructure and application services. The process is divided into two phases:
 
-The bootstrapping is divided into 2 separate phases. The first phase is to set up an ingress where you can access the frontend and backed directly using the generated ELB URL.
+**Phase 1:** Deploy ingress-nginx, frontend, and backend applications accessible via the dynamically provisioned ELB hostname.
 
-#### Phase 1
-
-Simply run:
+Run:
 
 ```bash
 ./scripts/phase1_bootstrap.sh
 ```
 
-Then just run the `curl` commands at the end and/or visit URL in the browser.
+Wait 2–3 minutes for the load balancer to stabilize, then verify using the `curl` commands or visit the URL in your browser.
 
-> Note: We recommend waiting a few minutes until everything is provisioned properly.
+**Alternative: Manual Helm Installation**
 
-##### Manual installation of the applications
-
-In case you want to install the frontend and backend apps separately or manually for whatever reason, we have also provided the option to do so here:
+If you prefer to skip the bootstrap script or install components individually:
 
 ```bash
 helm upgrade --install backend ./helm/backend -n demo --create-namespace
 helm upgrade --install frontend ./helm/frontend -n demo
-```
-
-```bash
 kubectl get pods,svc -n demo
 ```
 
-To verfiy the apps, you can also port forward to your local host and curl the localhost as well:
+To verify deployment and test locally:
 
 ```bash
-kubectl port-forward svc/frontend 8080:80 -n demo
+kubectl port-forward svc/frontend 8080:80 -n demo &
+kubectl port-forward svc/backend 8081:80 -n demo &
+
+curl http://localhost:8080
+curl http://localhost:8081/test
 ```
 
-```bash
-kubectl port-forward svc/backend 8081:80 -n demo
-```
+**Phase 2:** Set up OAuth2 authentication using GitHub.
 
-#### Phase 2
+Before running Phase 2, create a GitHub OAuth Application:
 
-Before runing the second bootstrap script, we need to setup the oauth. For this demo, we will be using GitHub. Copy the ELB URL from the previous output and visit the [GitHub Developers page](https://github.com/settings/developers).
+1. Go to [GitHub Settings → Developer applications](https://github.com/settings/developers)
+2. Click **New OAuth App**
+3. Fill in:
+   - **Application name:** Any name (e.g., "DevOps Challenge")
+   - **Homepage URL:** The ELB URL from Phase 1 output (e.g., `http://<ELB-HOSTNAME>`)
+   - **Authorization callback URL:** `http://<ELB-HOSTNAME>/oauth2/callback`
+4. Click **Register application**
+5. Save the **Client ID** and **Client Secret**
 
-Click on `New OAuth App` and input the URL and click `Register application`.
-
-![alt text](image-1.png)
-
-Once done, save the ClientID and Secret generated by GitHub.
-
-Now we are ready to run the second bootscrap script:
+Now run the Phase 2 bootstrap script:
 
 ```bash
 ./scripts/phase2_enable_oauth.sh
 ```
 
-Follow the instructions on the screen to either create or choose a GPG key (if already existing).
+The script will prompt you to:
 
-Wait a few minutes so the oauth-proxy finishes provisioning and then visit the website from the output. This should redirect you to GitHub and ask for you to authenticate.
+- Select or create a GPG key for SOPS encryption
+- Enter your GitHub OAuth Client ID and Client Secret
+- Confirm the deployment
 
-### Limitations
+Once the oauth2-proxy pod is ready (2–3 minutes), open the URL from the output in your browser. You should be redirected to GitHub to authenticate.
 
-After phase 2 you will only get 302 responses with the curl command. It is possible to fix this issue with implementing a basic auth if we want to access the site using the CLI. But for this particular demo, I have decided against it. But the solution option remains.
+## Architecture & Design Decisions
+
+**Demo Configuration Notes:**
+
+- **HTTP Only:** For simplicity in a demo environment, the setup uses HTTP instead of HTTPS. Production deployments would use TLS certificates (via cert-manager and Route53).
+- **Cookie Security:** OAuth2 cookies are marked as non-secure (`cookieSecure: false`) to work over HTTP. This is intentional for the demo.
+- **Email Domain:** Set to `*` to allow any GitHub user. Restrict this to your organization in production.
+- **CLI Access:** After enabling OAuth, browser-based access works; CLI access (curl) returns 302 redirects. In production, add API-level authentication or implement a separate endpoint.
+
+## Bonus: GitOps with ArgoCD
+
+For an advanced declarative approach with stable DNS integration, see the [`argocd` branch](https://github.com/RompfRobert/datavisyn-devops-challenge/tree/argocd). That branch includes:
+
+- Route53 DNS integration with your own domain
+- ArgoCD for GitOps-driven deployments
+- Stable HTTPS ingress configuration
+- Automated certificate management
+
+The `argocd` branch demonstrates enterprise-grade GitOps practices but requires domain ownership and is less reproducible for third-party reviewers.
+
+## Troubleshooting
+
+**Phase 1 hangs waiting for load balancer:**
+
+- AWS can take 5–10 minutes to provision the ELB. The script will retry up to 60 times (10 minutes).
+- Manually check: `kubectl -n ingress-nginx get svc ingress-nginx-controller`
+
+**Phase 2 fails with GPG errors:**
+
+- Ensure `gpg` and `sops` are installed and `helm-secrets` plugin was installed in Phase 1.
+- Check: `helm plugin list | grep secrets`
+
+**OAuth redirect fails:**
+
+- Confirm the GitHub OAuth App callback URL exactly matches the Phase 1 ELB URL plus `/oauth2/callback`.
+- Verify the oauth2-proxy pod is running: `kubectl -n demo get pods -l app=oauth2-proxy`
+
+## Cleanup
+
+To destroy all resources and avoid charges:
+
+```bash
+./scripts/reset_cluster.sh
+```
+
+```bash
+cd terraform && terraform destroy -auto-approve && cd ..
+```
+
+This will remove the EKS cluster, VPC, and all associated AWS resources.
