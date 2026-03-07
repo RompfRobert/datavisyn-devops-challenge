@@ -47,3 +47,38 @@ output "node_group_names" {
   description = "Created EKS managed node group names."
   value       = try([for ng in module.eks.eks_managed_node_groups : ng.node_group_name], keys(module.eks.eks_managed_node_groups))
 }
+
+output "delegated_zone_name" {
+  description = "Delegated Route53 hosted zone name (for example: challenge.rompf.dev)."
+  value       = aws_route53_zone.delegated.name
+}
+
+output "delegated_zone_id" {
+  description = "Route53 hosted zone ID for the delegated subdomain."
+  value       = aws_route53_zone.delegated.zone_id
+}
+
+output "delegated_zone_name_servers" {
+  description = "Route53 nameservers to configure as NS records for subdomain delegation at your registrar."
+  value       = aws_route53_zone.delegated.name_servers
+}
+
+output "app_host" {
+  description = "Public app hostname used for frontend/backend/oauth2-proxy ingress."
+  value       = local.app_host
+}
+
+output "argocd_host" {
+  description = "Public ArgoCD hostname."
+  value       = local.argocd_host
+}
+
+output "external_dns_role_arn" {
+  description = "IAM role ARN for ExternalDNS IRSA service account annotation."
+  value       = aws_iam_role.external_dns.arn
+}
+
+output "cert_manager_role_arn" {
+  description = "IAM role ARN for cert-manager IRSA service account annotation."
+  value       = aws_iam_role.cert_manager.arn
+}

@@ -139,3 +139,21 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "root_domain" {
+  description = "Root DNS domain you own in Namecheap or another registrar (for example: rompf.dev)."
+  type        = string
+  default     = "rompf.dev"
+}
+
+variable "delegated_subdomain_label" {
+  description = "Subdomain label delegated to Route53 (for example: challenge, resulting in challenge.rompf.dev)."
+  type        = string
+  default     = "challenge"
+}
+
+variable "argocd_subdomain_label" {
+  description = "Subdomain label for ArgoCD under the delegated subdomain (for example: argocd, resulting in argocd.challenge.rompf.dev)."
+  type        = string
+  default     = "argocd"
+}
