@@ -33,7 +33,7 @@ All of the following tools must be installed:
 | **Helm** | >= 3.12 | [Download](https://helm.sh/docs/intro/install/) • [Homebrew](https://formulae.brew.sh/formula/helm) |
 | **AWS CLI** | v2 | [Download](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) • [Homebrew](https://formulae.brew.sh/formula/awscli) |
 | **sops** | >= 3.8 | [GitHub](https://github.com/getsops/sops#installation) • [Homebrew](https://formulae.brew.sh/formula/sops) |
-| **GPG** | >= 2.2 | [Download](https://gnupg.org/download/) • [Homebrew](https://formulae.brew.sh/formula/gnupg) |
+| **age** | >= 1.2 | [GitHub](https://github.com/FiloSottile/age) • [Homebrew](https://formulae.brew.sh/formula/age) |
 
 Verify your installations:
 
@@ -43,7 +43,7 @@ kubectl version
 helm version
 aws --version
 jq --version
-openssl version
+age-keygen --version
 git --version
 ```
 
@@ -52,8 +52,8 @@ AWS credentials must be configured before applying Terraform.
 ## High-Level Flow
 
 1. Terraform provisions EKS and DNS/IAM foundations.
-2. `bootstrap_argocd.sh` installs platform controllers.
-3. ArgoCD deploys app-of-apps (`platform-root`) from this repo.
+2. `bootstrap_argocd.sh` installs only Argo CD (with SOPS + helm-secrets support) and applies the root app.
+3. Argo CD deploys all controllers and workloads from this repo.
 4. Ingress routes `challenge.rompf.dev` through oauth2-proxy auth.
 
 ## Architecture
@@ -98,14 +98,14 @@ flowchart LR
 
   TF -->|provisions| EKS
   TF -->|creates NS delegation zone| R53
-  BS -->|installs via Helm| NGINX
-  BS -->|installs via Helm| EXT
-  BS -->|installs via Helm| CM
   BS -->|installs via Helm| ARGO
-  BS -->|applies| ISS
-  BS -->|creates| O2S
+  BS -->|creates| sops-age secret
   BS -->|applies root app| ROOT
 
+  ROOT --> NGINX
+  ROOT --> CM
+  ROOT --> ISS
+  ROOT --> EXT
   ROOT --> APPS
   REPO -->|sync targetRevision=argocd| ARGO
   APPS --> FE
@@ -163,7 +163,23 @@ ArgoCD OAuth (for `argocd.challenge.rompf.dev`):
 
 Keep both client IDs and secrets ready.
 
-## 3) Bootstrap Platform + ArgoCD
+## 3) Prepare Encrypted oauth2-proxy Values
+
+`oauth2-proxy` credentials are sourced from `helm/oauth2-proxy/secrets/values.sops.yaml` via `helm-secrets`.
+
+Update and re-encrypt this file before deployment:
+
+```bash
+sops helm/oauth2-proxy/secrets/values.sops.yaml
+```
+
+Set:
+
+- `github.clientId`
+- `github.clientSecret`
+- `oauth2Proxy.cookieSecret` (32-byte random secret)
+
+## 4) Bootstrap Argo CD
 
 Run:
 
@@ -171,19 +187,19 @@ Run:
 ./scripts/bootstrap_argocd.sh
 ```
 
-> Before you run the bootstrap, be sure the change the domain to YOUR domain in the code otherwise it's going to use `rompf.dev`
+> Before you run the bootstrap, be sure to change the domain to your domain in the code; otherwise it will use `rompf.dev`.
 
 The script will:
 
-- read Terraform outputs for region, hosts, zone, and IRSA roles
-- print Route53 nameservers for delegation
-- ask for OAuth credentials and Let's Encrypt email
-- install ingress-nginx, ExternalDNS, cert-manager, and ArgoCD
-- create `letsencrypt-dns` ClusterIssuer
-- create `demo/oauth2-proxy-secret`
-- apply `argocd/root-application.yaml`
+- read Terraform outputs for region/hosts and print Route53 nameservers for delegation
+- ask only for Argo CD GitHub OAuth client ID/secret (+ optional org)
+- ask for a path to your AGE private key for `sops` decryption in repo-server
+- install Argo CD (with ingress + Dex), `sops`, and `helm-secrets` support in repo-server
+- create the `sops-age` Secret in `argocd` and apply `argocd/root-application.yaml`
 
-## 4) Verify Deployment
+Argo CD then installs: ingress-nginx, cert-manager, ClusterIssuer, external-dns, oauth2-proxy, frontend, backend.
+
+## 5) Verify Deployment
 
 ArgoCD apps:
 
@@ -194,9 +210,8 @@ kubectl -n argocd get applications.argoproj.io -o wide
 Expected apps:
 
 - `platform-root`
-- `frontend`
-- `backend`
-- `oauth2-proxy`
+- `ingress-nginx`, `cert-manager`, `cluster-issuers`, `external-dns`
+- `oauth2-proxy`, `frontend`, `backend`
 
 Ingresses:
 
@@ -251,7 +266,7 @@ The same applies for the backend:
 ## Architecture Notes
 
 - ArgoCD uses app-of-apps (`argocd/root-application.yaml`) with child apps in `argocd/apps/`.
-- `oauth2-proxy` runs with `secret.create=false` and references `oauth2-proxy-secret`.
+- `oauth2-proxy` runs with `secret.create=true` and loads encrypted values from `secrets://secrets/values.sops.yaml`.
 - Frontend/backend ingress auth uses:
   - `nginx.ingress.kubernetes.io/auth-url: http://oauth2-proxy.demo.svc.cluster.local:4180/oauth2/auth`
   - `nginx.ingress.kubernetes.io/auth-signin: https://challenge.rompf.dev/oauth2/start?rd=$escaped_request_uri`
