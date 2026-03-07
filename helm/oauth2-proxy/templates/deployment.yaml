@@ -30,7 +30,11 @@ spec:
             - --scope={{ .Values.oauth2Proxy.scope }}
           envFrom:
             - secretRef:
-                name: {{ .Values.secret.create | ternary (include "oauth2-proxy.fullname" .) (required "secret.existingSecret is required when secret.create=false" .Values.secret.existingSecret) }}
+                {{- if .Values.secret.create }}
+                name: {{ include "oauth2-proxy.fullname" . }}
+                {{- else }}
+                name: {{ required "secret.existingSecret is required when secret.create=false" .Values.secret.existingSecret }}
+                {{- end }}
           ports:
             - name: http
               containerPort: 4180

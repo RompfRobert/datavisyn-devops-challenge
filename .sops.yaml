@@ -1,0 +1,3 @@
+creation_rules:
+  - path_regex: ^helm/oauth2-proxy/secrets/values\.sops\.ya?ml$
+    age: age1zxzu3s39vx9zufj8enwuv67tw7svlcf50lxm42yjllhh3awprf2sw65ps8
