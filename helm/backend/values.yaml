@@ -15,6 +15,7 @@ service:
   type: ClusterIP
   port: 80
   targetPort: 5678
+  internalTrafficPolicy: Cluster
 
 ingress:
   enabled: false

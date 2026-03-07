@@ -11,12 +11,27 @@ spec:
     path: helm/frontend
     helm:
       values: |
+        replicaCount: 2
+        service:
+          internalTrafficPolicy: Local
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values: ["frontend"]
+                    - key: app.kubernetes.io/instance
+                      operator: In
+                      values: ["frontend"]
+                topologyKey: kubernetes.io/hostname
         ingress:
           enabled: true
           className: nginx
           annotations:
             cert-manager.io/cluster-issuer: letsencrypt-dns
-            nginx.ingress.kubernetes.io/auth-url: https://challenge.rompf.dev/oauth2/auth
+            nginx.ingress.kubernetes.io/auth-url: http://oauth2-proxy.demo.svc.cluster.local:4180/oauth2/auth
             nginx.ingress.kubernetes.io/auth-signin: https://challenge.rompf.dev/oauth2/start?rd=$escaped_request_uri
           hosts:
             - host: challenge.rompf.dev

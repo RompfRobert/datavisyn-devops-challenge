@@ -180,6 +180,8 @@ server:
 configs:
   params:
     server.insecure: "false"
+  rbac:
+    policy.default: role:admin
   cm:
     url: https://${ARGOCD_HOST}
     dex.config: |
