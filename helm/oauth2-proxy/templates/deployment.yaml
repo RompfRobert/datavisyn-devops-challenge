@@ -23,14 +23,14 @@ spec:
             - --http-address=0.0.0.0:4180
             - --upstream=static://202
             - --email-domain={{ .Values.oauth2Proxy.emailDomain }}
-            - --redirect-url=http://{{ .Values.ingress.host }}/oauth2/callback
+            - --redirect-url={{ .Values.oauth2Proxy.redirectScheme }}://{{ .Values.ingress.host }}/oauth2/callback
             - --cookie-secure={{ .Values.oauth2Proxy.cookieSecure | ternary "true" "false" }}
             - --set-xauthrequest=true
             - --reverse-proxy=true
             - --scope={{ .Values.oauth2Proxy.scope }}
           envFrom:
             - secretRef:
-                name: {{ include "oauth2-proxy.fullname" . }}
+                name: {{ .Values.secret.create | ternary (include "oauth2-proxy.fullname" .) .Values.secret.existingSecret }}
           ports:
             - name: http
               containerPort: 4180
