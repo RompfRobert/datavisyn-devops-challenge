@@ -258,16 +258,6 @@ The same applies for the backend:
 - TLS is owned by frontend ingress (`challenge-rompf-dev-tls`) via cert-manager.
 - Frontend/backend services use `internalTrafficPolicy: Local` and are scaled to 2 replicas with pod anti-affinity for node-local resilience.
 
-## ArgoCD Login and App Visibility
-
-ArgoCD login is configured via Dex + GitHub OAuth.
-
-To ensure GitHub users can see apps by default, the cluster RBAC config should include:
-
-- `argocd-rbac-cm.data.policy.default = role:admin`
-
-This default is baked into `scripts/bootstrap_argocd.sh` for new environments.
-
 ## Cleanup
 
 ```bash
