@@ -203,7 +203,7 @@ repoServer:
           apk add --no-cache curl git bash
           curl -L -o /custom-tools/sops https://github.com/getsops/sops/releases/download/v3.9.4/sops-v3.9.4.linux.amd64
           chmod +x /custom-tools/sops
-          helm plugin install --verify=false https://github.com/jkroepke/helm-secrets --version v4.7.5
+          helm plugin install https://github.com/jkroepke/helm-secrets --version v4.7.5
 EOF
 
 helm upgrade --install argocd argo/argo-cd \
